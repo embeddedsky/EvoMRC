@@ -1,0 +1,510 @@
+Memristor with threshold
+*.OPTIONS	POST=1	LIST ingold=2 runlvl=0
+.param stime=0.5
+*.param uni=unif(0.5,0.5)
+
+* send parameters to the .control section
+
+.csparam stime={stime}
+
+
+**************MOSFET**********************************************************************
+.model n12 nmos level=49 version=3.3.0 L=1.000E-05 W=1.000E-05
+.model p12 pmos level=49 version=3.3.0 L=1.000E-05 W=1.000E-05
+
+*.model n1 nmos level=49 version=3.3.0
+*.model p1 pmos level=49 version=3.3.0
+
+*.MODEL n1 NMOS level=49 version=3.3.0 W=3u L=0.35u pd=9u ad=9p ps=9u as=9p
+*.MODEL p1 PMOS level=49 version=3.3.0 W=7.5u L=0.35u pd=13.5u ad=22.5p ps=13.5u as=22.5p
+
+*.model n1 nmos level=8 version=3.2.2
+*.model p1 pmos level=8 version=3.2.2
+
+.MODEL n12 NMOS L=1.000E-05 W=1.000E-05
+.MODEL p21 PMOS L=1.000E-05 W=1.000E-05
+
+.MODEL n1 NMOS (LEVEL=49
++VERSION=3.3 CAPMOD=2 MOBMOD=1
++TOX=1E-7 NCH=1.45E17 NSUB=5.33E16 XT=8.66E-8
++VTH0=0.3 U0= 600 WINT=2.0E-7 LINT=1E-7
++NGATE=5E20 RSH=1082 JS=3.23E-8 JSW=3.23E-8 CJ=6.8E-4 MJ=0.5 PB=0.95
++CJSW=1.26E-10 MJSW=0.5 PBSW=0.95 PCLM=5
++CGSO=3.4E-10 CGDO=3.4E-10 CGBO=5.75E-10)
+
+.MODEL p1 PMOS (LEVEL=49
++VERSION=3.3 CAPMOD=2 MOBMOD=1
++TOX=1E-7 NCH=7.12E16 NSUB=3.16E16 XT=8.66E-8
++VTH0=-0.3 U0= 376.72 WINT=2.0E-7 LINT=2.26E-7
++NGATE=5E20 RSH=1347 JS=3.51E-8 JSW=3.51E-8 CJ=5.28E-4 MJ=0.5 PB=0.94
++CJSW=1.19E-10 MJSW=0.5 PBSW=0.94
++CGSO=4.5E-10 CGDO=4.5E-10 CGBO=5.75E-10)
+
+***************************memristor**************************************************************************************
+.subckt memristor 1 2 params: alpha=1e-4 beta=0.2 gamma=1e-3 deltam=1 wmax=1 wmin=0 xini='ra' reten='0.1/stime' tao='0.15/stime',
+.param lambda='0.005/stime' eta1=4 eta2=2 tau='0.5/stime' sigma=0.0001 theta=0.01
+**the conductance**
+Cx x 0 1 IC={xini}
+Raux y 0 1T
+**the reten raito**
+Cy y 0 1 IC={reten}
+Rauy y 0 1T
+**the diffusion time**
+Cz z 0 1 IC={tao}
+Rauz z 0 1T
+Gx 0 x value={trunc(V(1,2),V(x))*(lambda*exp(eta1*V(1,2)-exp(-eta2*V(1,2)))-(V(x)-V(y)/V(z)))}
+Gy 0 y value={trunc(V(1,2),V(y))*lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2)))}
+Gz 0 z value={theta*(exp(eta1*V(1,2))-exp(-eta2*V(1,2)))}
+
+* rate equation considering the diffusion effect *
+*Gx 0 x value={trunc(V(1,2),V(x))*(lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2)))-V(x)/tau)}
+* rate equation without the diffusion effect *
+* Gx 0 x value=trunc(V(1,2),V(x))*lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2))) *
+* Gx 0 x value=f(V(x),V(1,2),1)*lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2))) *
+
+.func sign2(var) {(sgn(var)+1)/2}
+.func trunc(var1,var2) {sign2(var1)*sign2(wmax-var2)+sign2(-var1)*sign2(var2-wmin)}
+
+* window function, according to Joglekar *
+.func f(x,p) {(1-pow(2*x-1,2*p))}
+* window function proposed by Biolek *
+*.func f(x,i,p)=1-(x-stp(-i))ˆ (2*p)*
+
+Gw 1 2 value={(1-V(x))*alpha*(1-exp(-beta*V(1,2)))+V(x)*gamma*sinh(deltam*V(1,2))}
+.ends memristor
+
+
+
+
+**************reservior units-4类*********************************
+***************unitrc1*********************************
+.subckt unitrc1 in out params: ra=0.14 tb=0.03
+xmen 2 121 memristor xini='ra'
+vtemp2 121 1 dc 0
+Mp1 2 cpminus in in p1
+Mn1 1 cppulse out out n1
+Mn2 2 cpminus out out n1
+Mp2 1 cppulse in in p1
+vcp41 cppulse 0 DC 0 PULSE(0 5 0 0 0 'tb*stime' 'tb*2*stime')
+vcp42 cpminus 0 DC 0 PULSE(5 0 0 0 0 'tb*stime' 'tb*2*stime')
+*vtemp1 out1 out dc 0
+*xs1 out2 0 out myswitch
+.ends
+
+
+***************unitrc3（大阻值相当于断路）*********************************
+.subckt unitrc2 in out
+R1 in out 1e+12
+.ends
+
+***********input voltage*****************
+*vcp 100 0 sin(2.5 2.5 '10/stime' 0 0 0)
+*vcp 100 0 sin(4.5 4.5 '20/stime' '0.5*stime' 0 0)
+.subckt filesource1 1 2
+a1 %vd([1 2]) filesrc1
+.model filesrc1 filesource (file="signal1.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource2 1 2
+a1 %vd([1 2]) filesrc2
+.model filesrc2 filesource (file="signal2.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource3 1 2
+a1 %vd([1 2]) filesrc3
+.model filesrc3 filesource (file="signal3.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource4 1 2
+a1 %vd([1 2]) filesrc4
+.model filesrc4 filesource (file="signal4.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource5 1 2
+a1 %vd([1 2]) filesrc5
+.model filesrc5 filesource (file="signal5.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource6 1 2
+a1 %vd([1 2]) filesrc6
+.model filesrc6 filesource (file="signal6.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource7 1 2
+a1 %vd([1 2]) filesrc7
+.model filesrc7 filesource (file="signal7.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource8 1 2
+a1 %vd([1 2]) filesrc8
+.model filesrc8 filesource (file="signal8.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource9 1 2
+a1 %vd([1 2]) filesrc9
+.model filesrc9 filesource (file="signal9.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+X1 100 0 filesource1
+X2 101 0 filesource2
+X3 102 0 filesource3
+X4 103 0 filesource4
+X5 104 0 filesource5
+X6 105 0 filesource6
+X7 106 0 filesource7
+X8 107 0 filesource8
+X9 108 0 filesource9
+***********target voltage*****************
+*vtarget1 vt1 0 DC 0 PULSE(0 0.001 0 0 0 'stime/20' 'stime/10')
+*vtarget2 vt2 0 DC 0 PULSE(0 0.001 0  'stime/20' 0 'stime/999' 'stime/10')
+*vtarget3 vt3 0 DC 0 sin(0.0005 0.0005 '20/stime' 0 0 0)
+
+.subckt filesource10 1 2
+a1 %vd([1 2]) filesrc10
+.model filesrc10 filesource (file="output.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+xtarget1 vt1 0 filesource4
+**************input layer***********
+*xunitin1 1 2 unitin ta=0.199
+*xopein 2 5 ope
+*Rin1 1 5 1k
+***********reservior input voltage (演化下面out_gain这个参数-1到1之间)*****************
+*vp1 112 0 DC 0 PULSE(1 0 0 0 0 'stime' 'stime')
+*a2 [5 112] 113 sigmulta2
+*.model sigmulta2 mult(in_offset=[0 0]
+*+ in_gain=[1.0 1.0] out_gain=1 out_offset=0)
+
+************待生成reservior*(必须包含节点113)(6-26)*********************************
+*************随机选择reservior中的一个节点接输入和地***********
+
+
+vtemprc1 100 12 dc 0
+vtemprc2 101 9 dc 0
+vtemprc3 102 4 dc 0
+vtemprc4 103 11 dc 0
+vtemprc5 104 14 dc 0
+vtemprc6 105 7 dc 0
+vtemprc7 106 5 dc 0
+vtemprc8 107 3 dc 0
+vtemprc9 108 15 dc 0
+vtemprc10  1 0 dc 0
+xunit1-2  1  2  unitrc1  ra=0.58  tb=0.33
+xunit1-3  1  3  unitrc1  ra=0.35  tb=0.04
+
+xunit2-3  2  3  unitrc1  ra=0.66  tb=0.31
+
+xunit3-1  3  1  unitrc1  ra=0.54  tb=0.00
+xunit3-4  3  4  unitrc1  ra=0.46  tb=0.35
+xunit3-5  3  5  unitrc1  ra=0.69  tb=0.37
+
+xunit4-5  4  5  unitrc1  ra=0.38  tb=0.13
+
+xunit5-3  5  3  unitrc1  ra=0.46  tb=0.03
+xunit5-6  5  6  unitrc1  ra=0.38  tb=0.32
+xunit5-7  5  7  unitrc1  ra=0.94  tb=0.23
+
+xunit6-7  6  7  unitrc1  ra=0.82  tb=0.11
+
+xunit7-5  7  5  unitrc1  ra=0.39  tb=0.11
+xunit7-8  7  8  unitrc1  ra=0.51  tb=0.11
+xunit7-9  7  9  unitrc1  ra=0.89  tb=0.11
+
+xunit8-9  8  9  unitrc1  ra=0.49  tb=0.32
+
+xunit9-7  9  7  unitrc1  ra=0.49  tb=0.00
+xunit9-10  9  10  unitrc1  ra=0.51  tb=0.21
+xunit9-11  9  11  unitrc1  ra=0.98  tb=0.21
+
+xunit10-11  10  11  unitrc1  ra=0.47  tb=0.13
+
+xunit11-9  11  9  unitrc1  ra=0.80  tb=0.10
+xunit11-12  11  12  unitrc1  ra=0.53  tb=0.24
+xunit11-13  11  13  unitrc1  ra=0.86  tb=0.44
+
+xunit12-13  12  13  unitrc1  ra=0.38  tb=0.25
+
+xunit13-11  13  11  unitrc1  ra=0.16  tb=0.02
+xunit13-14  13  14  unitrc1  ra=0.52  tb=0.19
+xunit13-15  13  15  unitrc1  ra=0.29  tb=0.26
+
+xunit14-15  14  15  unitrc1  ra=0.63  tb=0.21
+
+xunit15-1  15  1  unitrc1  ra=0.52  tb=0.19
+xunit15-13  15  13  unitrc1  ra=0.42  tb=0.29
+
+.save   time
+.save   v.xunit1-1.vtemp2#branch
+.save   v.xunit1-2.vtemp2#branch
+.save   v.xunit1-3.vtemp2#branch
+.save   v.xunit1-4.vtemp2#branch
+.save   v.xunit1-5.vtemp2#branch
+.save   v.xunit1-6.vtemp2#branch
+.save   v.xunit1-7.vtemp2#branch
+.save   v.xunit1-8.vtemp2#branch
+.save   v.xunit1-9.vtemp2#branch
+.save   v.xunit1-10.vtemp2#branch
+.save   v.xunit1-11.vtemp2#branch
+.save   v.xunit1-12.vtemp2#branch
+.save   v.xunit1-13.vtemp2#branch
+.save   v.xunit1-14.vtemp2#branch
+.save   v.xunit1-15.vtemp2#branch
+
+.save   v.xunit2-1.vtemp2#branch
+.save   v.xunit2-2.vtemp2#branch
+.save   v.xunit2-3.vtemp2#branch
+.save   v.xunit2-4.vtemp2#branch
+.save   v.xunit2-5.vtemp2#branch
+.save   v.xunit2-6.vtemp2#branch
+.save   v.xunit2-7.vtemp2#branch
+.save   v.xunit2-8.vtemp2#branch
+.save   v.xunit2-9.vtemp2#branch
+.save   v.xunit2-10.vtemp2#branch
+.save   v.xunit2-11.vtemp2#branch
+.save   v.xunit2-12.vtemp2#branch
+.save   v.xunit2-13.vtemp2#branch
+.save   v.xunit2-14.vtemp2#branch
+.save   v.xunit2-15.vtemp2#branch
+
+.save   v.xunit3-1.vtemp2#branch
+.save   v.xunit3-2.vtemp2#branch
+.save   v.xunit3-3.vtemp2#branch
+.save   v.xunit3-4.vtemp2#branch
+.save   v.xunit3-5.vtemp2#branch
+.save   v.xunit3-6.vtemp2#branch
+.save   v.xunit3-7.vtemp2#branch
+.save   v.xunit3-8.vtemp2#branch
+.save   v.xunit3-9.vtemp2#branch
+.save   v.xunit3-10.vtemp2#branch
+.save   v.xunit3-11.vtemp2#branch
+.save   v.xunit3-12.vtemp2#branch
+.save   v.xunit3-13.vtemp2#branch
+.save   v.xunit3-14.vtemp2#branch
+.save   v.xunit3-15.vtemp2#branch
+
+.save   v.xunit4-1.vtemp2#branch
+.save   v.xunit4-2.vtemp2#branch
+.save   v.xunit4-3.vtemp2#branch
+.save   v.xunit4-4.vtemp2#branch
+.save   v.xunit4-5.vtemp2#branch
+.save   v.xunit4-6.vtemp2#branch
+.save   v.xunit4-7.vtemp2#branch
+.save   v.xunit4-8.vtemp2#branch
+.save   v.xunit4-9.vtemp2#branch
+.save   v.xunit4-10.vtemp2#branch
+.save   v.xunit4-11.vtemp2#branch
+.save   v.xunit4-12.vtemp2#branch
+.save   v.xunit4-13.vtemp2#branch
+.save   v.xunit4-14.vtemp2#branch
+.save   v.xunit4-15.vtemp2#branch
+
+.save   v.xunit5-1.vtemp2#branch
+.save   v.xunit5-2.vtemp2#branch
+.save   v.xunit5-3.vtemp2#branch
+.save   v.xunit5-4.vtemp2#branch
+.save   v.xunit5-5.vtemp2#branch
+.save   v.xunit5-6.vtemp2#branch
+.save   v.xunit5-7.vtemp2#branch
+.save   v.xunit5-8.vtemp2#branch
+.save   v.xunit5-9.vtemp2#branch
+.save   v.xunit5-10.vtemp2#branch
+.save   v.xunit5-11.vtemp2#branch
+.save   v.xunit5-12.vtemp2#branch
+.save   v.xunit5-13.vtemp2#branch
+.save   v.xunit5-14.vtemp2#branch
+.save   v.xunit5-15.vtemp2#branch
+
+.save   v.xunit6-1.vtemp2#branch
+.save   v.xunit6-2.vtemp2#branch
+.save   v.xunit6-3.vtemp2#branch
+.save   v.xunit6-4.vtemp2#branch
+.save   v.xunit6-5.vtemp2#branch
+.save   v.xunit6-6.vtemp2#branch
+.save   v.xunit6-7.vtemp2#branch
+.save   v.xunit6-8.vtemp2#branch
+.save   v.xunit6-9.vtemp2#branch
+.save   v.xunit6-10.vtemp2#branch
+.save   v.xunit6-11.vtemp2#branch
+.save   v.xunit6-12.vtemp2#branch
+.save   v.xunit6-13.vtemp2#branch
+.save   v.xunit6-14.vtemp2#branch
+.save   v.xunit6-15.vtemp2#branch
+
+.save   v.xunit7-1.vtemp2#branch
+.save   v.xunit7-2.vtemp2#branch
+.save   v.xunit7-3.vtemp2#branch
+.save   v.xunit7-4.vtemp2#branch
+.save   v.xunit7-5.vtemp2#branch
+.save   v.xunit7-6.vtemp2#branch
+.save   v.xunit7-7.vtemp2#branch
+.save   v.xunit7-8.vtemp2#branch
+.save   v.xunit7-9.vtemp2#branch
+.save   v.xunit7-10.vtemp2#branch
+.save   v.xunit7-11.vtemp2#branch
+.save   v.xunit7-12.vtemp2#branch
+.save   v.xunit7-13.vtemp2#branch
+.save   v.xunit7-14.vtemp2#branch
+.save   v.xunit7-15.vtemp2#branch
+
+.save   v.xunit8-1.vtemp2#branch
+.save   v.xunit8-2.vtemp2#branch
+.save   v.xunit8-3.vtemp2#branch
+.save   v.xunit8-4.vtemp2#branch
+.save   v.xunit8-5.vtemp2#branch
+.save   v.xunit8-6.vtemp2#branch
+.save   v.xunit8-7.vtemp2#branch
+.save   v.xunit8-8.vtemp2#branch
+.save   v.xunit8-9.vtemp2#branch
+.save   v.xunit8-10.vtemp2#branch
+.save   v.xunit8-11.vtemp2#branch
+.save   v.xunit8-12.vtemp2#branch
+.save   v.xunit8-13.vtemp2#branch
+.save   v.xunit8-14.vtemp2#branch
+.save   v.xunit8-15.vtemp2#branch
+
+.save   v.xunit9-1.vtemp2#branch
+.save   v.xunit9-2.vtemp2#branch
+.save   v.xunit9-3.vtemp2#branch
+.save   v.xunit9-4.vtemp2#branch
+.save   v.xunit9-5.vtemp2#branch
+.save   v.xunit9-6.vtemp2#branch
+.save   v.xunit9-7.vtemp2#branch
+.save   v.xunit9-8.vtemp2#branch
+.save   v.xunit9-9.vtemp2#branch
+.save   v.xunit9-10.vtemp2#branch
+.save   v.xunit9-11.vtemp2#branch
+.save   v.xunit9-12.vtemp2#branch
+.save   v.xunit9-13.vtemp2#branch
+.save   v.xunit9-14.vtemp2#branch
+.save   v.xunit9-15.vtemp2#branch
+
+.save   v.xunit10-1.vtemp2#branch
+.save   v.xunit10-2.vtemp2#branch
+.save   v.xunit10-3.vtemp2#branch
+.save   v.xunit10-4.vtemp2#branch
+.save   v.xunit10-5.vtemp2#branch
+.save   v.xunit10-6.vtemp2#branch
+.save   v.xunit10-7.vtemp2#branch
+.save   v.xunit10-8.vtemp2#branch
+.save   v.xunit10-9.vtemp2#branch
+.save   v.xunit10-10.vtemp2#branch
+.save   v.xunit10-11.vtemp2#branch
+.save   v.xunit10-12.vtemp2#branch
+.save   v.xunit10-13.vtemp2#branch
+.save   v.xunit10-14.vtemp2#branch
+.save   v.xunit10-15.vtemp2#branch
+
+.save   v.xunit11-1.vtemp2#branch
+.save   v.xunit11-2.vtemp2#branch
+.save   v.xunit11-3.vtemp2#branch
+.save   v.xunit11-4.vtemp2#branch
+.save   v.xunit11-5.vtemp2#branch
+.save   v.xunit11-6.vtemp2#branch
+.save   v.xunit11-7.vtemp2#branch
+.save   v.xunit11-8.vtemp2#branch
+.save   v.xunit11-9.vtemp2#branch
+.save   v.xunit11-10.vtemp2#branch
+.save   v.xunit11-11.vtemp2#branch
+.save   v.xunit11-12.vtemp2#branch
+.save   v.xunit11-13.vtemp2#branch
+.save   v.xunit11-14.vtemp2#branch
+.save   v.xunit11-15.vtemp2#branch
+
+.save   v.xunit12-1.vtemp2#branch
+.save   v.xunit12-2.vtemp2#branch
+.save   v.xunit12-3.vtemp2#branch
+.save   v.xunit12-4.vtemp2#branch
+.save   v.xunit12-5.vtemp2#branch
+.save   v.xunit12-6.vtemp2#branch
+.save   v.xunit12-7.vtemp2#branch
+.save   v.xunit12-8.vtemp2#branch
+.save   v.xunit12-9.vtemp2#branch
+.save   v.xunit12-10.vtemp2#branch
+.save   v.xunit12-11.vtemp2#branch
+.save   v.xunit12-12.vtemp2#branch
+.save   v.xunit12-13.vtemp2#branch
+.save   v.xunit12-14.vtemp2#branch
+.save   v.xunit12-15.vtemp2#branch
+
+.save   v.xunit13-1.vtemp2#branch
+.save   v.xunit13-2.vtemp2#branch
+.save   v.xunit13-3.vtemp2#branch
+.save   v.xunit13-4.vtemp2#branch
+.save   v.xunit13-5.vtemp2#branch
+.save   v.xunit13-6.vtemp2#branch
+.save   v.xunit13-7.vtemp2#branch
+.save   v.xunit13-8.vtemp2#branch
+.save   v.xunit13-9.vtemp2#branch
+.save   v.xunit13-10.vtemp2#branch
+.save   v.xunit13-11.vtemp2#branch
+.save   v.xunit13-12.vtemp2#branch
+.save   v.xunit13-13.vtemp2#branch
+.save   v.xunit13-14.vtemp2#branch
+.save   v.xunit13-15.vtemp2#branch
+
+.save   v.xunit14-1.vtemp2#branch
+.save   v.xunit14-2.vtemp2#branch
+.save   v.xunit14-3.vtemp2#branch
+.save   v.xunit14-4.vtemp2#branch
+.save   v.xunit14-5.vtemp2#branch
+.save   v.xunit14-6.vtemp2#branch
+.save   v.xunit14-7.vtemp2#branch
+.save   v.xunit14-8.vtemp2#branch
+.save   v.xunit14-9.vtemp2#branch
+.save   v.xunit14-10.vtemp2#branch
+.save   v.xunit14-11.vtemp2#branch
+.save   v.xunit14-12.vtemp2#branch
+.save   v.xunit14-13.vtemp2#branch
+.save   v.xunit14-14.vtemp2#branch
+.save   v.xunit14-15.vtemp2#branch
+
+.save   v.xunit15-1.vtemp2#branch
+.save   v.xunit15-2.vtemp2#branch
+.save   v.xunit15-3.vtemp2#branch
+.save   v.xunit15-4.vtemp2#branch
+.save   v.xunit15-5.vtemp2#branch
+.save   v.xunit15-6.vtemp2#branch
+.save   v.xunit15-7.vtemp2#branch
+.save   v.xunit15-8.vtemp2#branch
+.save   v.xunit15-9.vtemp2#branch
+.save   v.xunit15-10.vtemp2#branch
+.save   v.xunit15-11.vtemp2#branch
+.save   v.xunit15-12.vtemp2#branch
+.save   v.xunit15-13.vtemp2#branch
+.save   v.xunit15-14.vtemp2#branch
+.save   v.xunit15-15.vtemp2#branch
+
+
+.save v(vt1)
+
+.control
+set xtrtol=1
+let deltime = stime/899
+tran $&deltime $&stime uic
+linearize
+run
+write rawfile0.raw
+set color0=white
+set color1=black
+set xbrushwidth=2
+.endc
