@@ -185,7 +185,7 @@ class CRJ_Genome:
     def mutate_step(self):
         self.step = np.random.randint(low=2, high=int(self.reservoir_num / 2))
 
-        # 重新更新wbool
+
         for i in range(0, self.reservoir_num - 1):
             self.w_bool[i][i + 1] = 1
         self.w_bool[self.reservoir_num - 1][0] = 1
