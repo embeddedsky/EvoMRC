@@ -1,0 +1,8 @@
+cir_filename='circuit.cir'
+fixed1_filename='fixed_file/fixed1'
+fixed2_filename='fixed_file/fixed2'
+target_filename='rawfile.raw'
+temp_target='rawfile.raw'
+spicepath = r'D:\Download\ngspice-34_64\Spice64\bin\ngspice_con'
+# spicepath =  r'/rds/bear-apps/2019b/EL7-haswell/software/ngspice/31-foss-2019b/bin/ngspice'
+log_file='logfile'

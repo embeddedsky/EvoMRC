@@ -1,0 +1,147 @@
+Memristor with threshold
+*.OPTIONS	POST=1	LIST ingold=2 runlvl=0
+.param stime=0.5
+*.param uni=unif(0.5,0.5)
+
+* send parameters to the .control section
+
+.csparam stime={stime}
+
+
+**************MOSFET**********************************************************************
+.model n12 nmos level=49 version=3.3.0 L=1.000E-05 W=1.000E-05
+.model p12 pmos level=49 version=3.3.0 L=1.000E-05 W=1.000E-05
+
+*.model n1 nmos level=49 version=3.3.0
+*.model p1 pmos level=49 version=3.3.0
+
+*.MODEL n1 NMOS level=49 version=3.3.0 W=3u L=0.35u pd=9u ad=9p ps=9u as=9p
+*.MODEL p1 PMOS level=49 version=3.3.0 W=7.5u L=0.35u pd=13.5u ad=22.5p ps=13.5u as=22.5p
+
+*.model n1 nmos level=8 version=3.2.2
+*.model p1 pmos level=8 version=3.2.2
+
+.MODEL n12 NMOS L=1.000E-05 W=1.000E-05
+.MODEL p21 PMOS L=1.000E-05 W=1.000E-05
+
+.MODEL n1 NMOS (LEVEL=49
++VERSION=3.3 CAPMOD=2 MOBMOD=1
++TOX=1E-7 NCH=1.45E17 NSUB=5.33E16 XT=8.66E-8
++VTH0=0.3 U0= 600 WINT=2.0E-7 LINT=1E-7
++NGATE=5E20 RSH=1082 JS=3.23E-8 JSW=3.23E-8 CJ=6.8E-4 MJ=0.5 PB=0.95
++CJSW=1.26E-10 MJSW=0.5 PBSW=0.95 PCLM=5
++CGSO=3.4E-10 CGDO=3.4E-10 CGBO=5.75E-10)
+
+.MODEL p1 PMOS (LEVEL=49
++VERSION=3.3 CAPMOD=2 MOBMOD=1
++TOX=1E-7 NCH=7.12E16 NSUB=3.16E16 XT=8.66E-8
++VTH0=-0.3 U0= 376.72 WINT=2.0E-7 LINT=2.26E-7
++NGATE=5E20 RSH=1347 JS=3.51E-8 JSW=3.51E-8 CJ=5.28E-4 MJ=0.5 PB=0.94
++CJSW=1.19E-10 MJSW=0.5 PBSW=0.94
++CGSO=4.5E-10 CGDO=4.5E-10 CGBO=5.75E-10)
+
+***************************memristor**************************************************************************************
+.subckt memristor plus minus params: Ron=100 Roff=10k xini='ra' uv='1e-14/stime' p=1,
+
+.param D=10n k={uv*Ron/pow(D,2)} a={(xini-Ron)/(Roff-xini)}
+
+*model of memristive port
+Roff plus aux {Roff}
+
+Eres aux minus value={(Ron-Roff)/(1+a*exp(-4*k*V(q)))*I(Eres)}
+
+*Rmem plus minus R='Roff+(Ron-Roff)/(1+a*exp(-4*k*V(q)))'
+*end of the model of memristive port
+
+*integrator model
+
+Gx 0 Q value={i(Eres)}
+
+Cint Q 0 1
+
+Raux Q 0 100meg
+
+*end of integrator model
+
+*alternative integrator model; SDT function for PSPICE can be replaced by IDT for LTspice
+
+*Eq Q 0 value={SDT(I(Eres))}
+
+.ends memristor
+
+
+
+
+**************reservior units-4类*********************************
+***************unitrc1*********************************
+.subckt unitrc1 in out params: ra=0.14 tb=0.03
+xmen 2 121 memristor xini='ra'
+vtemp2 121 1 dc 0
+Mp1 2 cpminus in in p1
+Mn1 1 cppulse out out n1
+Mn2 2 cpminus out out n1
+Mp2 1 cppulse in in p1
+vcp41 cppulse 0 DC 0 PULSE(0 5 0 0 0 'tb*stime' 'tb*2*stime')
+vcp42 cpminus 0 DC 0 PULSE(5 0 0 0 0 'tb*stime' 'tb*2*stime')
+*vtemp1 out1 out dc 0
+*xs1 out2 0 out myswitch
+.ends
+
+
+***************unitrc3（大阻值相当于断路）*********************************
+.subckt unitrc2 in out
+R1 in out 1e+12
+.ends
+
+***********input voltage*****************
+*vcp 100 0 sin(2.5 2.5 '10/stime' 0 0 0)
+*vcp 100 0 sin(4.5 4.5 '20/stime' '0.5*stime' 0 0)
+.subckt filesource1 1 2
+a1 %vd([1 2]) filesrc1
+.model filesrc1 filesource (file="signal1.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource2 1 2
+a1 %vd([1 2]) filesrc2
+.model filesrc2 filesource (file="signal2.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+.subckt filesource3 1 2
+a1 %vd([1 2]) filesrc3
+.model filesrc3 filesource (file="signal3.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+X1 100 0 filesource1
+X2 101 0 filesource2
+X3 102 0 filesource3
+***********target voltage*****************
+*vtarget1 vt1 0 DC 0 PULSE(0 0.001 0 0 0 'stime/20' 'stime/10')
+*vtarget2 vt2 0 DC 0 PULSE(0 0.001 0  'stime/20' 0 'stime/999' 'stime/10')
+*vtarget3 vt3 0 DC 0 sin(0.0005 0.0005 '20/stime' 0 0 0)
+
+.subckt filesource4 1 2
+a1 %vd([1 2]) filesrc4
+.model filesrc4 filesource (file="output.m" amploffset=[0] amplscale=[1]
++ timeoffset=0 timescale=1
++ timerelative=false amplstep=false)
+.ends
+
+xtarget1 vt1 0 filesource4
+**************input layer***********
+*xunitin1 1 2 unitin ta=0.199
+*xopein 2 5 ope
+*Rin1 1 5 1k
+***********reservior input voltage (演化下面out_gain这个参数-1到1之间)*****************
+*vp1 112 0 DC 0 PULSE(1 0 0 0 0 'stime' 'stime')
+*a2 [5 112] 113 sigmulta2
+*.model sigmulta2 mult(in_offset=[0 0]
+*+ in_gain=[1.0 1.0] out_gain=1 out_offset=0)
+
+************待生成reservior*(必须包含节点113)(6-26)*********************************
+*************随机选择reservior中的一个节点接输入和地***********

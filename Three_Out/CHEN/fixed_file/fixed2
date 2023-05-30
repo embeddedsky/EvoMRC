@@ -1,0 +1,17 @@
+.save vt1
+.save vt2
+.save vt3
+
+
+.control
+set xtrtol=1
+let deltime = stime/899
+tran $&deltime $&stime uic
+linearize
+run
+write rawfile.raw
+set color0=white
+set color1=black
+set xbrushwidth=2
+
+.endc

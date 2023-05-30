@@ -1,0 +1,127 @@
+Memristor with threshold
+.param stime=0.5
+
+.csparam stime={stime}
+
+
+**************MOSFET**********************************************************************
+.model n12 nmos level=49 version=3.3.0 L=1.000E-05 W=1.000E-05
+.model p12 pmos level=49 version=3.3.0 L=1.000E-05 W=1.000E-05
+
+.model n11 nmos level=49 version=3.1
+.model p11 pmos level=49 version=3.1
+
+.MODEL n1 NMOS level=49 version=3.3.0 W=3u L=0.35u pd=9u ad=9p ps=9u as=9p
+.MODEL p1 PMOS level=49 version=3.3.0 W=7.5u L=0.35u pd=13.5u ad=22.5p ps=13.5u as=22.5p
+
+.MODEL n12 NMOS (LEVEL=49
++VERSION=3.3 CAPMOD=2 MOBMOD=1
++TOX=1E-7 NCH=1.45E17 NSUB=5.33E16 XT=8.66E-8
++VTH0=0.3 U0= 600 WINT=2.0E-7 LINT=1E-7
++NGATE=5E20 RSH=1082 JS=3.23E-8 JSW=3.23E-8 CJ=6.8E-4 MJ=0.5 PB=0.95
++CJSW=1.26E-10 MJSW=0.5 PBSW=0.95 PCLM=5
++CGSO=3.4E-10 CGDO=3.4E-10 CGBO=5.75E-10)
+
+.MODEL p12 PMOS (LEVEL=49
++VERSION=3.3 CAPMOD=2 MOBMOD=1
++TOX=1E-7 NCH=7.12E16 NSUB=3.16E16 XT=8.66E-8
++VTH0=-0.3 U0= 376.72 WINT=2.0E-7 LINT=2.26E-7
++NGATE=5E20 RSH=1347 JS=3.51E-8 JSW=3.51E-8 CJ=5.28E-4 MJ=0.5 PB=0.94
++CJSW=1.19E-10 MJSW=0.5 PBSW=0.94
++CGSO=4.5E-10 CGDO=4.5E-10 CGBO=5.75E-10) 
+
+
+**************memristor4*********************
+.subckt memristor1 plus minus params: Ron=100 Roff=10k xini='ra' uv='1e-14/stime' p=1,
+
+.param D=10n k={uv*Ron/pow(D,2)} a={(xini-Ron)/(Roff-xini)}
+
+*model of memristive port
+Roff plus aux {Roff}
+
+Eres aux minus value={(Ron-Roff)/(1+a*exp(-4*k*V(q)))*I(Eres)}
+
+*Rmem plus minus R='Roff+(Ron-Roff)/(1+a*exp(-4*k*V(q)))'
+*end of the model of memristive port
+
+*integrator model
+
+Gx 0 Q value={i(Eres)}
+
+Cint Q 0 1
+
+Raux Q 0 100meg
+
+*end of integrator model
+
+*alternative integrator model; SDT function for PSPICE can be replaced by IDT for LTspice
+
+*Eq Q 0 value={SDT(I(Eres))}
+
+.ends memristor1
+
+
+***************************memristor**************************************************************************************
+.subckt memristor 1 2 params: alpha=1e-4 beta=0.2 gamma=1e-3 deltam=1 wmax=1 wmin=0 xini='ra' k='tb' reten='0.1/stime' tao='0.15/stime',
+.param lambda='0.015*k/stime' eta1=4 eta2=2 tau='0.5/stime' sigma=0.0001 theta=0.01
+**the conductance**
+Cx x 0 1 IC={xini}
+Raux y 0 1T
+**the reten raito**
+Cy y 0 1 IC={reten}
+Rauy y 0 1T
+**the diffusion time**
+Cz z 0 1 IC={tao}
+Rauz z 0 1T
+Gx 0 x value={trunc(V(1,2),V(x))*(lambda*exp(eta1*V(1,2)-exp(-eta2*V(1,2)))-(V(x)-V(y)/V(z)))}
+Gy 0 y value={trunc(V(1,2),V(y))*lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2)))}
+Gz 0 z value={theta*(exp(eta1*V(1,2))-exp(-eta2*V(1,2)))}
+
+* rate equation considering the diffusion effect *
+*Gx 0 x value={trunc(V(1,2),V(x))*(lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2)))-V(x)/tau)}
+* rate equation without the diffusion effect *
+* Gx 0 x value=trunc(V(1,2),V(x))*lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2))) *
+* Gx 0 x value=f(V(x),V(1,2),1)*lambda*(exp(eta1*V(1,2))-exp(-eta2*V(1,2))) *
+
+.func sign2(var) {(sgn(var)+1)/2}
+.func trunc(var1,var2) {sign2(var1)*sign2(wmax-var2)+sign2(-var1)*sign2(var2-wmin)}
+
+* window function, according to Joglekar *
+.func f(x,p) {(1-pow(2*x-1,2*p))}
+* window function proposed by Biolek *
+*.func f(x,i,p)=1-(x-stp(-i))ˆ (2*p)*
+
+Gw 1 2 value={(1-V(x))*alpha*(1-exp(-beta*V(1,2)))+V(x)*gamma*sinh(deltam*V(1,2))}
+.ends memristor
+
+
+**************reservior units-4类*********************************
+***************unitrc1*********************************
+.subckt unitrc1 in out params: ra=0.14 tb=0.03
+xmen out 121 memristor xini='ra' k='tb'
+vtemp2 121 in dc 0
+*Mp1 2 cpminus in in p1
+*Mn1 1 cppulse out out n1
+*Mn2 2 cpminus out out n1
+*Mp2 1 cppulse in in p1
+vcp41 cppulse 0 DC 0 PULSE(0 5 0 0 0 'tb*stime' 'tb*2*stime')
+vcp42 cpminus 0 DC 0 PULSE(5 0 0 0 0 'tb*stime' 'tb*2*stime')
+*vtemp1 out1 out dc 0
+*xs1 out2 0 out myswitch
+.ends
+
+***************unitrc2（大阻值相当于断路）*********************************
+.subckt unitrc2 in out
+R1 in out 1e+12
+.ends
+
+***********input voltage*****************
+vcp 100 0 sin(2.5 2.5 '10/stime' 0 0 0)
+***********target voltage*****************
+vtarget1 vt1 0 DC 0 PULSE(-0.001 0.001 0 0 0 'stime/20' 'stime/10')
+vtarget2 vt2 0 DC 0 PULSE(-0.001 0.001 0  'stime/20' 0 'stime/999' 'stime/10')
+vtarget3 vt3 0 DC 0 sin(0 0.001 '20/stime' 0 0 0)
+
+************待生成reservior*（节点从1开始到20）*********************************
+*************随机选择reservior中的一个节点接输入和地***********
+**********100是输入电压*****************
