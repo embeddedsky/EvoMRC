@@ -6,14 +6,11 @@ import sys
 from RCRJ_Genome import *
 class RC_RCRJ:
     def __init__(self,Is_Adapt):
-        # 种群
+
         self.population_size=40
         self.population=[]
-        # 物种
-        self.species=[]
 
-        #进化概率
-        # self.
+        self.species=[]
 
         self.init_reservoir_num=10
         self.max_reservoir_num = 30
@@ -40,7 +37,7 @@ class RC_RCRJ:
         with open('output/fitness_record','w+') as f:
             for k in range(0,K):
                 self.evolve_no_specia()
-                print("第",k,"次迭代最优：",self.population[0].fitness)
+                print("The",k,"-th optimal：",self.population[0].fitness)
                 f.writelines(str(self.population[0].fitness))
                 f.writelines('\n')
                 np.save("output/w1",self.population[0].w1)
@@ -101,39 +98,39 @@ class RC_RCRJ:
                 if random.random()<mutate_rate:
                     if self.Is_Adapt=="1":
                         temp_pop.rewire_ra()
-                    #            变异权重
+   
                     temp_pop.mutate_weight()
-                    #             增加节点
+
                     if random.random() < 0.8 and temp_pop.reservoir_num < self.max_reservoir_num:
                         temp_pop.add_node()
-                    #             变异步长
+
                     if random.random() < 0.8:
                         temp_pop.mutate_step()
-                    #     变异输入连接
+
                     if random.random() < 0.8:
                         temp_pop.mutate_in_gnd()
                 self.population[p] = copy.deepcopy(temp_pop)
             else:
                 if self.Is_Adapt == "1":
                     self.population[p].rewire_ra()
-                #            变异权重
+
                 self.population[p].mutate_weight()
-                #             增加节点
+
                 if random.random() < 0.8 and self.population[p].reservoir_num < self.max_reservoir_num:
                     self.population[p].add_node()
-                #             变异步长
+
                 if random.random() < 0.8:
                     self.population[p].mutate_step()
-                 #     变异输入连接
+
                 if random.random() < 0.8:
                     self.population[p].mutate_in_gnd()
 
 
 
-        #         计算fitness
+
         for p in range(0,self.population_size):
             self.population[p].cal_fitness()
-            print("第",p,"个个体的fitness",self.population[p].fitness)
+            print("The",p,"-th's individual fitness",self.population[p].fitness)
 
 
     def __tournament_selection(self):
