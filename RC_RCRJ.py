@@ -28,7 +28,7 @@ class RC_RCRJ:
         for i in range(0,self.population_size):
             gene=RCRJ_Genome(self.init_reservoir_num)
             gene.cal_fitness()
-            print("第",i,"个个体的fitness",gene.fitness)
+            print("The",i,"-th individual's fitness",gene.fitness)
             self.population.append(gene)
 
 
@@ -77,7 +77,6 @@ class RC_RCRJ:
                     if i < min(parent1.reservoir_num, parent2.reservoir_num):
                         for j in range(0,temp_pop.reservoir_num):
                             if j<min(parent1.reservoir_num, parent2.reservoir_num):
-                                #储存池
                                 if parent1.w_bool[i][j]!=0 and parent2.w_bool[i][j]!=0 and random.random()<0.5:
                                     temp_pop.w1[i][j]=(parent1.w1[i][j]+parent2.w1[i][j])/2
                                     temp_pop.w2[i][j] = (parent1.w2[i][j] + parent2.w2[i][j]) / 2
